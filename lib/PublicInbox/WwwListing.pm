@@ -12,6 +12,7 @@ use PublicInbox::ConfigIter;
 use PublicInbox::WwwStream;
 use URI::Escape qw(uri_escape_utf8);
 use PublicInbox::MID qw(mid_escape);
+use POSIX qw(Inf);
 
 sub ibx_entry {
 	my ($ctx, $ibx, $ce) = @_;
@@ -32,8 +33,9 @@ EOM
 		$url = ascii_html(prurl($ctx->{env}, $url));
 		$tmp .= qq(  <a\nhref="$url">$url</a>\n);
 	}
+	my $so = $ibx->{sortorder} // Inf;
 	push(@{$ctx->{-list}}, (scalar(@_) == 3 ? # $misc in use, already sorted
-				$tmp : [ $ce->{-modified}, $tmp ] ));
+				[$so, $tmp] : [$so, $ce->{-modified}, $tmp] ));
 }
 
 sub list_match_i { # ConfigIter callback
@@ -222,9 +224,20 @@ sub psgi_triple {
 		$code = 200;
 		if ($mset) { # already sorted, so search bar:
 			print $zfh mset_nav_top($ctx, $mset);
-		} else { # sort config dump by ->modified
+			# FIXME: make PublicInbox::MiscIdx index sortorder
+			# then use Xapian::MultiValueKeyMaker or
+			# Search::Xapian::MultiValueSorter (old) in
+			# PublicInbox::MiscSearch
 			@$list = map { $_->[1] }
-				sort { $b->[0] <=> $a->[0] } @$list;
+				sort { $a->[0] <=> $b->[0] } @$list;
+		} else { # sort by sortorder (asc), then modified (desc)
+			my $so; # outside of sort block to reduce allocations
+			# $list = [ [$sortorder, {-modified}, $raw_html], ... ]
+			@$list = map { $_->[2] }
+				sort {
+					$so = $a->[0] <=> $b->[0];
+					$so ? $so : $b->[1] <=> $a->[1]
+				} @$list;
 		}
 		print $zfh '<pre>', join("\n", @$list); # big
 		print $zfh mset_footer($ctx, $mset) if $mset;

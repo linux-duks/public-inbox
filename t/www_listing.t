@@ -207,6 +207,33 @@ EOM
 	undef $sock;
 	tiny_test($json, $host, $port, 1);
 
+	# test sortorder config
+	undef $td;
+	open $fh, '>>', $cfgfile;
+	print $fh <<"";
+[publicinbox "bare"]
+	sortorder = 1
+[publicinbox "v2"]
+	sortorder = 2
+
+	close $fh;
+	my $sock_so = tcp_server();
+	my ($host_so, $port_so) = tcp_host_port($sock_so);
+	$td = start_script($cmd, $env, { 3 => $sock_so });
+	{
+		my $http = HTTP::Tiny->new;
+		my $res = $http->get("http://$host_so:$port_so/");
+		is($res->{status}, 200, 'got listing with sortorder');
+		my $c = $res->{content};
+		my $bare_pos = index($c, '/bare');
+		my $v2_pos = index($c, '/v2');
+		my $alt_pos = index($c, '/alt');
+		ok($bare_pos < $v2_pos,
+			'bare (sortorder=1) before v2 (sortorder=2)');
+		ok($v2_pos < $alt_pos,
+			'v2 (sortorder=2) before alt (no sortorder)');
+	}
+
 	# grok-pull sleeps a long while some places:
 	# https://lore.kernel.org/tools/20211013110344.GA10632@dcvr/
 	skip 'TEST_GROK unset', 12 unless $ENV{TEST_GROK};

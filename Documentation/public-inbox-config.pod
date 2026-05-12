@@ -151,6 +151,16 @@ not affect messages which are already indexed.
 
 Default: C<0>
 
+=item publicinbox.<name>.sortorder
+
+Integer controlling the display order of this inbox on the main
+listing page.  Lower values appear first.  Inboxes without this
+setting are listed after all sorted inboxes, ordered by last
+modification time (descending).  This is useful for pinning
+important or frequently-accessed inboxes to the top of the list.
+
+Default: none (sorted by modification time descending)
+
 =item publicinbox.<name>.indexSequentialShard
 
 See L<public-inbox-index(1)/publicInbox.indexSequentialShard>
