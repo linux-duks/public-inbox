@@ -34,6 +34,10 @@ sub event_step {
 	do {
 		if (my $addr = accept(my $c, $sock)) {
 			IO::Handle::blocking($c, 0); # no accept4 :<
+			# newer IO::Socket::SSL (tested 2.098) doesn't like
+			# unblessed sockets on TLS handshake failures;
+			# and plan to unify DS{rbuf} with {pi_io_rbuf}
+			bless $c, 'PublicInbox::IO';
 			eval { $self->{post_accept}->($c, $addr, $sock) };
 			warn "E: $@\n" if $@;
 		} elsif ($! == EAGAIN || $! == ECONNABORTED) {
