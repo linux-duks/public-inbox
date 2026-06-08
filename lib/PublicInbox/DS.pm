@@ -455,6 +455,26 @@ sub do_read ($$$;$) {
 	$r; # undef or 0 (EOF)
 }
 
+sub rbuf_size { length(${$_[0]->{rbuf} // return}) }
+
+# the final record MUST end with $delim, otherwise it is stuck in $self->{rbuf}
+sub do_gets {
+	my ($self, $delim) = @_;
+	my ($rec, $r, $rbuf);
+	$rbuf = $self->{rbuf} // \(my $x = '');
+	$delim //= "\n";
+	while (1) {
+		if (($r = index($$rbuf, $delim)) >= 0) {
+			$rec = substr $$rbuf, 0, $r + length($delim), '';
+			rbuf_idle $self, $rbuf;
+			return $rec;
+		}
+		# do_read may be implemented in PublicInbox::DSdeflate
+		$r = $self->do_read($rbuf, 65536, length($$rbuf)) // return;
+		return '' if !$r;
+	}
+}
+
 # drop the socket if we hit unrecoverable errors on our system which
 # require BOFH attention: ENOSPC, EFBIG, EIO, EMFILE, ENFILE...
 sub drop ($@) {

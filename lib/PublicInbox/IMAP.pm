@@ -1196,28 +1196,21 @@ sub event_step {
 	# only read more requests if we've drained the write buffer,
 	# otherwise we can be buffering infinitely w/o backpressure
 
-	my $rbuf = $self->{rbuf} // \(my $x = '');
-	my $line = index($$rbuf, "\n");
-	while ($line < 0) {
-		if (length($$rbuf) >= LINE_MAX) {
+	my $line = $self->do_gets // do {
+		if (($self->rbuf_size // 0) >= LINE_MAX) {
 			$self->write(\"\* BAD request too long\r\n");
 			return $self->close;
 		}
-		$self->do_read($rbuf, LINE_MAX, length($$rbuf)) or
-				return uo2m_hibernate($self);
-		$line = index($$rbuf, "\n");
-	}
-	$line = substr($$rbuf, 0, $line + 1, '');
-	$line =~ s/\r?\n\z//s;
-	return $self->close if $line =~ /[[:cntrl:]]/s;
+		return $self->{sock} ? uo2m_hibernate($self) : undef;
+	};
+	($line eq '' || !($line =~ s/\r?\n\z//s) || $line =~ /[[:cntrl:]]/s)
+			and return $self->close;
 	my $t0 = now();
 	my $fd = fileno($self->{sock});
 	my $r = eval { process_line($self, $line) };
 	my $pending = $self->{wbuf} ? ' pending' : '';
 	out($self, "[$fd] %s - %0.6f$pending - $r", $line, now() - $t0);
-
 	return $self->close if $r < 0;
-	$self->rbuf_idle($rbuf);
 
 	# maybe there's more pipelined data, or we'll have
 	# to register it for socket-readiness notifications
