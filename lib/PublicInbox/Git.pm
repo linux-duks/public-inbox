@@ -248,7 +248,7 @@ sub cat_async_step ($$) {
 	croak 'BUG: inflight empty or odd' if scalar(@$inflight) < 3;
 	my ($req, $cb, $arg) = @$inflight[0, 1, 2];
 	my ($bref, $oid, $type, $size);
-	my $head = $self->{sock}->my_readline;
+	my $head = $self->{sock}->my_gets;
 	my $cmd = ref($req) ? $$req : $req;
 	# ->fail may be called via Gcf2Client.pm
 	my $info = $self->{-bc} && substr($cmd, 0, 5) eq 'info ';
@@ -320,7 +320,7 @@ sub check_async_step ($$) {
 	my ($ck, $inflight) = @_;
 	croak 'BUG: inflight empty or odd' if scalar(@$inflight) < 3;
 	my ($req, $cb, $arg) = @$inflight[0, 1, 2];
-	chomp(my $line = $ck->{sock}->my_readline);
+	chomp(my $line = $ck->{sock}->my_gets);
 	my ($hex, $type, $size) = split(/ /, $line);
 
 	# git <2.21 would show `dangling' (2.21+ shows `ambiguous')

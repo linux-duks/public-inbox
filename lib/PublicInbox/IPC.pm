@@ -14,7 +14,7 @@ use autodie qw(close pipe read send socketpair);
 use Errno qw(EAGAIN EINTR);
 use Carp qw(croak carp);
 use PublicInbox::DS qw(awaitpid);
-use PublicInbox::IO qw(my_bufread my_readline);
+use PublicInbox::IO qw(my_bufread my_gets);
 use PublicInbox::Spawn;
 use PublicInbox::OnDestroy;
 use PublicInbox::WQWorker;
@@ -64,9 +64,9 @@ our $send_cmd = PublicInbox::Spawn->can('send_cmd4') // do {
 sub _get_rec ($) {
 	my ($r) = @_;
 	my ($len, $bref);
-	$len = my_readline($r) // croak "readline: $!";
+	$len = my_gets($r) // croak "gets: $!";
 	return if $len eq ''; # EOF
-	chop($len) eq "\n" or croak "readline: no LF byte in <$len>";
+	chop($len) eq "\n" or croak "gets: no LF byte in <$len>";
 	$bref = my_bufread($r, $len) or
 		croak defined($bref) ? 'read EOF' : "bufread($len): $!";
 	length($$bref) == $len or croak "bufread($len) short: ", length($$bref);

@@ -6,7 +6,7 @@ package PublicInbox::IO;
 use v5.12;
 use parent qw(IO::Handle Exporter);
 use PublicInbox::DS qw(awaitpid);
-our @EXPORT_OK = qw(poll_in read_all try_cat write_file my_readline my_bufread);
+our @EXPORT_OK = qw(poll_in read_all try_cat write_file my_gets my_bufread);
 use Carp qw(croak);
 use IO::Poll qw(POLLIN);
 use Errno qw(EINTR EAGAIN);
@@ -124,19 +124,22 @@ sub my_bufread ($$) {
 	\$no_pad;
 }
 
-# always uses "\n"
-sub my_readline ($) {
-	my ($io) = @_;
+sub my_gets ($;$$) {
+	my ($io, $delim, $nowait) = @_;
 	my $rbuf = ${*$io}{pi_io_rbuf} //= \(my $new = '');
+	$delim //= "\n";
 	while (1) {
-		if ((my $n = index($$rbuf, "\n")) >= 0) {
-			my $ret = substr($$rbuf, 0, $n + 1, '');
+		if ((my $n = index($$rbuf, $delim)) >= 0) {
+			my $ret = substr($$rbuf, 0, $n + length($delim), '');
 			delete(${*$io}{pi_io_rbuf}) if $$rbuf eq '';
 			return $ret;
 		}
 		my $r = sysread($io, $$rbuf, 65536, length($$rbuf));
 		if (!defined($r)) {
-			next if ($! == EAGAIN and poll_in($io));
+			if ($! == EAGAIN) {
+				return if $nowait;
+				next if poll_in($io);
+			}
 			next if $! == EINTR; # may be set by sysread or poll_in
 			return; # unrecoverable error
 		} elsif ($r == 0) { # return whatever's left on EOF
