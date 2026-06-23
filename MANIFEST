@@ -126,6 +126,7 @@ contrib/selinux/el7/publicinbox.fc
 contrib/selinux/el7/publicinbox.te
 devel/README
 devel/longest-tests
+devel/syntax-check-modified
 devel/sysdefs-list
 devel/try-lei
 examples/README

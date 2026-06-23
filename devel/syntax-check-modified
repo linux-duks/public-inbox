@@ -1,0 +1,24 @@
+# Copyright all contributors <meta@public-inbox.org>
+# License: AGPL-3.0+ <http://www.gnu.org/licenses/agpl-3.0.txt>
+eval 'exec perl -wS $0 ${1+"$@"}'
+if 0; # running under some shell
+use v5.12;
+my %synfiles = map { $_ => 1 } @ARGV;
+my @modified;
+{
+	local $/ = "\0";
+	chomp(@modified = `git ls-files -z -m`);
+}
+my @mod = grep { $synfiles{$_} } @modified;
+# TODO: hook into (GNU) make jobserver? we don't modify too many
+# files at once, though.
+if (@mod) {
+	my $err;
+	for (@mod) {
+		system $^X, qw(-w -I lib -c), $_;
+		$err ||= $?;
+	}
+	exit($err || 0);
+} else {
+	warn "# No files modified\n";
+}

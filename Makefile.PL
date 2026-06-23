@@ -41,7 +41,6 @@ my @syn = (@EXE_FILES, grep(m!^lib/.*\.pm$!, @manifest), @scripts);
 @syn = grep(!/Unsubscribe\.pm/, @syn) if !eval { require Crypt::CBC };
 @syn = grep(!/SaPlugin/, @syn) if !eval { require Mail::SpamAssassin };
 $v->{syn_files} = \@syn;
-$v->{my_syntax} = [map { "$_.syntax" } @syn];
 my %native = (
 	XapHelperCxx => [ qw(xh_cidx.h xh_mset.h xap_helper.h) ],
 );
@@ -234,14 +233,8 @@ $TGTS
 
 check-man : $check_lexgrog$warn_no_pod
 
-# syntax checks are currently GNU make only:
-%.syntax :: %
-	@\$(PERL) -w -I lib -c \$<
-
-syntax:: \$(my_syntax)
-
-changed = \$(shell git ls-files -m)
-dsyn :: \$(addsuffix .syntax, \$(filter \$(changed), \$(syn_files)))
+dsyn :
+	@\$(PERL) -w devel/syntax-check-modified \$(syn_files)
 
 check_manifest := if test -e .git && git ls-files >MANIFEST.gen 2>&1; then \\
 		diff -u MANIFEST MANIFEST.gen; fi
