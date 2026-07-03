@@ -29,6 +29,7 @@ our @EXPORT_OK = qw(git_unquote git_quote %HEXLEN2SHA %OFMT2HEXLEN
 			$ck_unlinked_packs git_exe);
 our $in_cleanup;
 our $async_warn; # true in read-only daemons
+our $noop = sub {};
 
 # committerdate:unix is git 2.9.4+ (2017-05-05), so using raw instead
 my @MODIFIED_DATE = qw[for-each-ref --sort=-committerdate
@@ -466,6 +467,7 @@ sub cat_active ($) {
 		($_[0]->{ck} && scalar(@{gcf_inflight($_[0]->{ck}) // []}))
 }
 
+# n.b.: use async_barrier for new code
 # check_async and cat_async may trigger the other, so ensure they're
 # both completely done by using this:
 sub async_wait_all ($) {
@@ -473,6 +475,23 @@ sub async_wait_all ($) {
 	while (cat_active($self)) {
 		check_async_wait($self);
 		cat_async_wait($self);
+	}
+}
+
+# runs $on_destroy (PublicInbox::OnDestroy) after all currently in-flight
+# requests are done:
+sub async_barrier {
+	my ($self, $on_destroy) = @_;
+	if (my $ck = $self->{ck}) { # old git only
+		if (my $inflight = gcf_inflight($ck)) {
+			write_all $ck, "\n", \&check_async_step, $inflight;
+			push @$inflight, '', $noop, $on_destroy;
+		}
+	}
+	if (my $inflight = gcf_inflight($self)) {
+		my $req = $self->{-bc} ? \'contents ' : \'';
+		write_all $self, "$$req\n", \&cat_async_step, $inflight;
+		push @$inflight, $req, $noop, $on_destroy;
 	}
 }
 

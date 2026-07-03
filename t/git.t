@@ -7,6 +7,7 @@ my ($dir, $for_destroy) = tmpdir();
 use PublicInbox::Import;
 use POSIX qw(strftime);
 use PublicInbox::Git;
+use PublicInbox::OnDestroy;
 is(PublicInbox::Git::MAX_INFLIGHT,
 	int(PublicInbox::Git::MAX_INFLIGHT), 'MAX_INFLIGHT is an integer');
 
@@ -68,7 +69,10 @@ is(PublicInbox::Git::MAX_INFLIGHT,
 		my ($bref, $oid_hex, $type, $size, $arg) = @_;
 		$missing = [ @_ ];
 	}, $arg);
+	my $od_called;
+	$gcf->async_barrier(on_destroy(sub { $od_called = 1 }));
 	$gcf->async_wait_all;
+	ok $od_called, 'on_destroy called';
 	my ($bref, $oid_hex, $type, $size, $arg_res) = @$res;
 	is_deeply([$oid_hex, $type, $size], \@x, 'got expected header');
 	is($arg_res, $arg, 'arg passed to cat_async');
