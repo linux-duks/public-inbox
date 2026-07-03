@@ -403,11 +403,53 @@ sub reindex_art {
 				\&_reindex_1, $smsg);
 }
 
-sub reindex_done {
-	my ($self) = @_;
+sub _ridx_done { # OnDestroy cb
+	my ($self, $rireq) = @_;
+	local @$self{0, 1} = @$rireq{qw(errfh lei_sock)};
+	barrier($self);
+	# $rireq->{eof_wr} goes out-of-scope to trigger lei->dclose
+}
+
+sub reindex_done ($$) {
+	my ($self, $rireq) = @_;
 	my ($eidx, $tl) = eidx_init($self);
-	$eidx->git->async_wait_all;
+	$eidx->git->watch_async;
+	$eidx->git->async_barrier(on_destroy(\&_ridx_done, $self, $rireq));
 	# ->done to be called via sto_barrier_request
+}
+
+sub event_step {
+	my ($self) = @_;
+	for my $reqid (keys %{$self->{ridx}}) {
+		my $rireq = $self->{ridx}->{$reqid};
+		if ($rireq->{cur} < $rireq->{max}) {
+			reindex_art($self, $rireq->{cur}++);
+		} else {
+			delete $self->{ridx}->{$reqid};
+			reindex_done($self, $rireq);
+		}
+	}
+	# run ->event_step again if more to do
+	keys(%{$self->{ridx}}) ? PublicInbox::DS::requeue($self)
+				: delete($self->{ridx});
+}
+
+sub reindex_range {
+	my ($self, $min, $max, $reqid) = @_;
+	$self->{ridx}->{$reqid} = {
+		errfh => $self->{0},
+		lei_sock => $self->{1},
+		eof_wr => $self->{2}, # calls lei->dclose via EOFpipe
+		cur => $min, max => $max,
+	};
+	PublicInbox::DS::requeue($self); # runs ->event_step
+}
+
+sub abort_long_req {
+	my ($self, $reqid) = @_;
+	my $reqs = $self->{ridx} // return;
+	my $rireq = $reqs->{$reqid} // return;
+	$rireq->{cur} = $rireq->{max}; # ->event_step finishes up
 }
 
 sub add_eml {

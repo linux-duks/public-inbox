@@ -677,6 +677,7 @@ sub schedule_cleanup {
 sub watch_async ($) {
 	my ($self) = @_;
 	schedule_cleanup($self);
+	$self->{sock} // return;
 	$self->{epwatch} //= do {
 		$self->SUPER::new($self->{sock}, EPOLLIN);
 		\undef;

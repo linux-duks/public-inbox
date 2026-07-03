@@ -1192,6 +1192,21 @@ sub dclose {
 	$self->close if $self->{-event_init_done}; # PublicInbox::DS::close
 }
 
+sub _drop_sto_long {
+	my ($self) = @_;
+	my $reqid = delete $self->{-long_reqid} or return;
+	($self->{sto} // return)->wq_do('abort_long_req', $reqid);
+}
+
+sub long_reqid {
+	my ($self) = @_;
+	$self->{-long_reqid} // do {
+		my @st = stat $self->{sock} or die "stat(lei->{sock}): $!";
+		# n.b. inode may be recycled by kernel, so prefix with time
+		$self->{-long_reqid} = PublicInbox::DS::now.".$st[1]";
+	};
+}
+
 # for long-running results
 sub event_step {
 	my ($self) = @_;
@@ -1208,6 +1223,7 @@ sub event_step {
 		if ($buf eq '') {
 			_drop_wq($self); # EOF, client disconnected
 			dclose($self);
+			_drop_sto_long($self);
 			$buf = 'TERM';
 		}
 		if ($buf =~ /\A(?:STOP|CONT|TERM)\z/) {
