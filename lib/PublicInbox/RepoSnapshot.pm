@@ -28,6 +28,9 @@ our %FMT_CFG = (
 
 my $SUFFIX = join('|', map { quotemeta } keys %FMT_TYPES);
 
+# snapshots for untagged tree-ish:
+my $OID_SUFFIX = qr!\b(?:[0-9a-f]{40}|[0-9a-f]{64})\z!;
+
 # TODO deal with tagged blobs
 
 sub archive_hdr { # parse_hdr for Qspawn
@@ -57,7 +60,10 @@ sub ver_check { # git->check_async callback
 		push @$cmd, 'archive', "--prefix=$ctx->{snap_pfx}/",
 				"--format=$ctx->{snap_fmt}", $treeish;
 		my $qsp = PublicInbox::Qspawn->new($cmd, undef, { quiet => 1 });
-		$qsp->psgi_yield($ctx->{env}, undef, \&archive_hdr, $ctx);
+		my $lim = $ctx->{snap_pfx} =~ $OID_SUFFIX
+			? $ctx->{wcr}->{pi_cfg}->limiter('-oidsnapshot', 1)
+			: undef;
+		$qsp->psgi_yield($ctx->{env}, $lim, \&archive_hdr, $ctx);
 	}
 }
 
