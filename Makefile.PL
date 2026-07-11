@@ -282,7 +282,7 @@ prefix = \$(HOME)
 bindir = \$(prefix)/bin
 symlink-install : lib/PublicInbox.pm
 	mkdir -p \$(bindir)
-	lei="\$(PWD)/lei.sh" && cd \$(bindir) && \\
+	lei="\$\$(pwd)/lei.sh" && cd \$(bindir) && \\
 	for x in \$(EXE_FILES); do \\
 		ln -sf "\$\$lei" \$\$(basename "\$\$x"); \\
 	done
