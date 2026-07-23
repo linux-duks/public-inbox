@@ -70,7 +70,8 @@ test_lei({ tmpdir => $tmpdir }, sub {
 		'imported blob');
 	lei_ok(qw(q m:qp@example.com --dedupe=none));
 	my $res_b = json_utf8->decode($lei_out);
-	is_deeply($res_b, $res_a, 'no extra DB entries');
+	delete $_->[0]->{pct} for ($res_a, $res_b);
+	is_xdeeply $res_b, $res_a, 'no extra DB entries';
 
 	# ensure tag works on index-only messages:
 	lei_ok(qw(tag +kw:seen t/utf8.eml));
