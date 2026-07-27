@@ -39,11 +39,28 @@ my $do_test = sub { SKIP: {
 		$r1 = $w1 = $s1a = undef;
 		$src = (',' x 1023) . '-' .('.' x 1024);
 		$send->($s1, $io, $src, $flag);
-		(@io) = $recv->($s2, $buf, 1024);
-		is($buf, (',' x 1023) . '-', 'silently truncated buf');
+		eval { @io = $recv->($s2, $buf, 1024) };
+		like "$@", qr/recvmsg .* trunc/, "truncation noted $desc";
+		is $buf, (',' x 1023) . '-', "truncated buf $desc";
+		$ck_io->() if @io;
+		if (my $leak_nr = $ENV{TEST_FD_LEAK_NR}) {
+			my @p;
+			pipe $p[0], $p[1];
+			diag "TEST_FD_LEAK_NR=$leak_nr start ($desc): ".
+				fileno($p[0]).', '.fileno($p[1]);
+			my $n_exc;
+			for (1..$leak_nr) {
+				$send->($s1, $io, $src, $flag);
+				eval { my @rio = $recv->($s2, $buf, 1024) };
+				$n_exc += $@ ? 1 : 0;
+			}
+			is $n_exc, $leak_nr, 'got $leak_nr exceptions';
+			pipe $p[2], $p[3];
+			diag "TEST_FD_LEAK_NR=$leak_nr done ($desc): ".
+				fileno($p[2]).', '.fileno($p[3]);
+		}
 
 		socketpair($s1, $s2, AF_UNIX, $type, 0);
-		$ck_io->();
 		$r1 = $w1 = $s1a = undef;
 
 		$s2->blocking(0);

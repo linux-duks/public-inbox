@@ -585,8 +585,8 @@ again:
 
 	// success! no signals for the rest of the request/response cycle
 	CHECK(int, 0, sigprocmask(SIG_SETMASK, &fullset, NULL));
-	if (r > 0 && msg.msg_flags & ~MSG_EOR)
-		ABORT("unexpected msg_flags");
+	if (r > 0 && msg.msg_flags & (MSG_CTRUNC|MSG_TRUNC))
+		ABORT("recvmsg %zu => %zd trunc %d", *len, r, msg.msg_flags);
 
 	*len = r;
 	if (cmsg.hdr.cmsg_level == SOL_SOCKET &&

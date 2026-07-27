@@ -21,7 +21,7 @@ use parent qw(Exporter);
 use bytes qw(length substr);
 use Carp qw(croak);
 use POSIX qw(ENOENT ENOSYS EINVAL O_NONBLOCK);
-use Socket qw(SOL_SOCKET SCM_RIGHTS);
+use Socket qw(SOL_SOCKET SCM_RIGHTS MSG_CTRUNC MSG_TRUNC);
 use Config;
 our %SIGNUM = (WINCH => 28); # most Linux, {Free,Net,Open}BSD, *Darwin
 our ($INOTIFY, %CONST);
@@ -587,6 +587,7 @@ if (defined($SYS_sendmsg) && defined($SYS_recvmsg)) {
 	substr($_[1], $r, length($_[1]), '');
 	my @ret;
 	if ($r > 0) {
+		my $msg_flags = (unpack TMPL_msghdr, $mh)[-1];
 		my ($len, $lvl, $type, @fds) = unpack(TMPL_cmsg_len.
 					'LL'. # cmsg_level, cmsg_type
 					CMSG_DATA_off.'i*', # @fds
@@ -595,6 +596,9 @@ if (defined($SYS_sendmsg) && defined($SYS_recvmsg)) {
 			$len -= CMSG_ALIGN_SIZEOF_cmsghdr;
 			@ret = fd2io(@fds[0..(($len / SIZEOF_int) - 1)]);
 		}
+		($msg_flags & (MSG_CTRUNC|MSG_TRUNC)) and
+			croak "recvmsg $len => $r trunc ".
+				sprintf('0x%0x', $msg_flags);
 	}
 	@ret;
 };

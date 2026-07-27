@@ -301,7 +301,9 @@ void recv_cmd4(PerlIO *s, SV *buf, STRLEN n)
 				Inline_Stack_Push(sv_2mortal(my_fdopen(*fd++)));
 		}
 		Inline_Stack_Done;
-		/* TODO: check msg_flags for MSG_TRUNC + MSG_CTRUNC */
+		if (msg.msg_flags & (MSG_CTRUNC|MSG_TRUNC))
+			croak("recvmsg %zu => %zd trunc %d\n",
+				(size_t)n, i, msg.msg_flags);
 	} else {
 		Inline_Stack_Push(&PL_sv_undef);
 		SvCUR_set(buf, 0);
