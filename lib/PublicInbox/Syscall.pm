@@ -310,11 +310,12 @@ BEGIN {
 			# cmsg_len, cmsg_level, cmsg_type
 			SIZEOF_cmsghdr => SIZEOF_int * 2 + SIZEOF_size_t,
 			CMSG_DATA_off => '',
-			TMPL_msghdr => 'PL' . # msg_name, msg_namelen
+			TMPL_msghdr => 'P' . # msg_name
+				'L' . # msg_namelen (socklen_t)
 				'@'.(2 * SIZEOF_ptr).'P'. # msg_iov
-				'i'. # msg_iovlen
+				TMPL_size_t. # msg_iovlen
 				'@'.(4 * SIZEOF_ptr).'P'. # msg_control
-				'L'. # msg_controllen (socklen_t)
+				TMPL_size_t. # msg_controllen
 				'i', # msg_flags
 		);
 	} elsif ($^O =~ /\A(?:freebsd|openbsd|netbsd|dragonfly)\z/) {
@@ -323,11 +324,12 @@ BEGIN {
 			FIONREAD => 0x4004667f,
 			SIZEOF_cmsghdr => SIZEOF_int * 3,
 			CMSG_DATA_off => SIZEOF_ptr == 8 ? '@16' : '',
-			TMPL_msghdr => 'PL' . # msg_name, msg_namelen
+			TMPL_msghdr => 'P' . # msg_name
+				'L' . # msg_namelen (socklen_t)
 				'@'.(2 * SIZEOF_ptr).'P'. # msg_iov
-				TMPL_size_t. # msg_iovlen
+				'i'. # msg_iovlen
 				'@'.(4 * SIZEOF_ptr).'P'. # msg_control
-				TMPL_size_t. # msg_controllen
+				'L'. # msg_controllen
 				'i', # msg_flags
 
 		);
