@@ -398,16 +398,22 @@ sub wq_broadcast {
 	croak "@exc" if @exc;
 }
 
+sub sendmsg_eor ($$$;$) {
+	my $n = $send_cmd->($_[0], $_[1], $_[2], MSG_EOR, $_[3] // 50) //
+		return;
+	$n == length($_[2]) ? $n : croak('sendmsg('.length($_[2])." > $n)");
+}
+
 sub stream_in_full ($$$) {
 	my ($s1, $io, $buf) = @_;
 	socketpair(my $r, my $w, AF_UNIX, SOCK_STREAM, 0);
-	my $n = $send_cmd->($s1, [ $r ],
-			ipc_freeze(['do_sock_stream', length($buf)]),
-			MSG_EOR) // croak "sendmsg: $!";
+	my $n = sendmsg_eor($s1, [ $r ],
+			ipc_freeze(['do_sock_stream', length($buf)]))
+		// croak "sendmsg: $!";
 	undef $r;
 	$n = $send_cmd->($w, $io, $buf, 0) // croak "sendmsg: $!";
 	print $w substr($buf, $n) if $n < length($buf); # need > 2G on Linux
-	close $w; # autodies
+	close $w; # autodies if print failed
 }
 
 sub wq_io_do { # always async
@@ -416,9 +422,9 @@ sub wq_io_do { # always async
 	my $buf = ipc_freeze([$sub, @args]);
 	if (length($buf) > $MY_MAX_ARG_LEN) {
 		stream_in_full($s1, $io, $buf);
+	} elsif (defined sendmsg_eor($s1, $io, $buf)) {
+		# success
 	} else {
-		my $n = $send_cmd->($s1, $io, $buf, MSG_EOR);
-		return if defined($n); # likely
 		$!{ETOOMANYREFS} and croak "sendmsg: $! (check RLIMIT_NOFILE)";
 		$!{EMSGSIZE} ? stream_in_full($s1, $io, $buf) :
 			croak("sendmsg: $!");
@@ -458,13 +464,13 @@ sub wq_nonblock_do { # always async
 	my $buf = ipc_freeze([$sub, @args]);
 	if ($self->{wqb}) { # saturated once, assume saturated forever
 		$self->{wqb}->flush_send($buf);
-	} elsif (!defined $send_cmd->($self->{-wq_s1}, [], $buf, MSG_EOR)) {
-		if ($!{EAGAIN} || $!{ENOBUFS} || $!{ENOMEM}) {
-			PublicInbox::WQBlocked->new($self, $buf);
-		} else {
-			croak "sendmsg: $!";
-		}
-	} # else success
+	} elsif (defined sendmsg_eor($self->{-wq_s1}, [], $buf)) {
+		# success!
+	} elsif ($!{EAGAIN} || $!{ENOBUFS} || $!{ENOMEM}) {
+		PublicInbox::WQBlocked->new($self, $buf);
+	} else {
+		croak "sendmsg: $!";
+	}
 }
 
 sub _wq_worker_start {

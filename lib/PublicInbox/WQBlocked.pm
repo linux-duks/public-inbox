@@ -6,7 +6,6 @@ package PublicInbox::WQBlocked;
 use v5.12;
 use parent qw(PublicInbox::DS);
 use PublicInbox::Syscall qw(EPOLLOUT EPOLLONESHOT);
-use Socket qw(MSG_EOR);
 use PublicInbox::IPC;
 use Carp ();
 
@@ -22,13 +21,12 @@ sub flush_send {
 	while (defined(my $buf = shift @{$self->{msgq}})) {
 		if (ref($buf) eq 'CODE') {
 			$buf->($self); # could be \&PublicInbox::DS::close
+		} elsif (defined(PublicInbox::IPC::sendmsg_eor(
+					$self->{sock}, [], $buf))) {
+			# success
 		} else {
-			my $wq_s1 = $self->{sock};
-			my $n = $PublicInbox::IPC::send_cmd->($wq_s1, [], $buf,
-								MSG_EOR);
-			next if defined($n);
 			if ($!{EAGAIN}) {
-				PublicInbox::DS::epwait($wq_s1,
+				PublicInbox::DS::epwait($self->{sock},
 							EPOLLOUT|EPOLLONESHOT);
 			} elsif ($!{ENOBUFS} || $!{ENOMEM}) {
 				PublicInbox::DS::add_uniq_timer($self + 0,

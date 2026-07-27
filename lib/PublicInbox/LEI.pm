@@ -11,7 +11,7 @@ use parent qw(PublicInbox::DS PublicInbox::LeiExternal
 	PublicInbox::LeiQuery);
 use autodie qw(bind chdir listen open pipe socket socketpair syswrite unlink);
 use Getopt::Long ();
-use Socket qw(AF_UNIX SOCK_SEQPACKET pack_sockaddr_un MSG_EOR);
+use Socket qw(AF_UNIX SOCK_SEQPACKET pack_sockaddr_un);
 use Errno qw(EPIPE EAGAIN ECONNREFUSED ENOENT ECONNRESET EINTR);
 use Cwd qw(getcwd);
 use POSIX qw(strftime);
@@ -1057,9 +1057,9 @@ sub start_mua {
 
 sub send_exec_cmd { # tell script/lei to execute a command
 	my ($self, $io, $cmd, $env) = @_;
-	$PublicInbox::IPC::send_cmd->(
+	PublicInbox::IPC::sendmsg_eor(
 			$self->{sock} // die('lei client gone'),
-			$io, exec_buf($cmd, $env), MSG_EOR) //
+			$io, exec_buf($cmd, $env)) //
 		Carp::croak("sendmsg: $!");
 }
 
