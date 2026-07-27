@@ -255,7 +255,20 @@ SV *send_cmd4_(PerlIO *s, SV *sio, SV *data, int flags, long tries)
 	return sent >= 0 ? newSViv(sent) : &PL_sv_undef;
 }
 
-void recv_cmd4_(PerlIO *s, SV *buf, STRLEN n)
+static SV *my_fdopen(int fd)
+{
+	GV *gv = newGVgen("PublicInbox::Spawn");
+	SV *ret = newRV_noinc((SV*)gv);
+	IO *io = GvIOn(gv);
+	IoTYPE(io) = '+';
+	IoIFP(io) = PerlIO_fdopen(fd, "r");
+	IoOFP(io) = PerlIO_fdopen(fd, "w");
+	sv_bless(ret, gv_stashpv("IO::File", TRUE));
+
+	return ret;
+}
+
+void recv_cmd4(PerlIO *s, SV *buf, STRLEN n)
 {
 	union my_cmsg cmsg = { 0 };
 	struct msghdr msg = { 0 };
@@ -283,15 +296,17 @@ void recv_cmd4_(PerlIO *s, SV *buf, STRLEN n)
 		if (cmsg.hdr.cmsg_level == SOL_SOCKET &&
 				cmsg.hdr.cmsg_type == SCM_RIGHTS) {
 			size_t len = cmsg.hdr.cmsg_len;
-			int *fdp = (int *)CMSG_DATA(&cmsg.hdr);
+			int *fd = (int *)CMSG_DATA(&cmsg.hdr);
 			for (i = 0; CMSG_LEN((i + 1) * sizeof(int)) <= len; i++)
-				Inline_Stack_Push(sv_2mortal(newSViv(*fdp++)));
+				Inline_Stack_Push(sv_2mortal(my_fdopen(*fd++)));
 		}
+		Inline_Stack_Done;
+		/* TODO: check msg_flags for MSG_TRUNC + MSG_CTRUNC */
 	} else {
 		Inline_Stack_Push(&PL_sv_undef);
 		SvCUR_set(buf, 0);
+		Inline_Stack_Done;
 	}
-	Inline_Stack_Done;
 }
 #endif /* defined(CMSG_SPACE) && defined(CMSG_LEN) */
 
@@ -351,11 +366,6 @@ EOM
 		*send_cmd4 = sub ($$$$;$) {
 			send_cmd4_($_[0], $_[1], $_[2], $_[3], $_[4] // 50);
 		};
-		require PublicInbox::CmdIPC4;
-		*recv_cmd4 = sub ($$$) {
-			my @r = recv_cmd4_($_[0], $_[1], $_[2]);
-			defined($r[0]) ? PublicInbox::CmdIPC4::fd2io(@r) : @r;
-		}
 	} else {
 		require PublicInbox::SpawnPP;
 		*pi_fork_exec = \&PublicInbox::SpawnPP::pi_fork_exec
