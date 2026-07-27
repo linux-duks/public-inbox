@@ -27,7 +27,7 @@ use Scalar::Util qw(blessed reftype);
 # sendmsg(2) was a single send on a larger buffer.
 my $MY_MAX_ARG_LEN = 65536;
 
-our @EXPORT_OK = qw(ipc_freeze ipc_thaw nproc_shards);
+our @EXPORT_OK = qw(ipc_freeze ipc_thaw nproc_shards send_eor);
 my ($enc, $dec);
 # ->imports at BEGIN turns sereal_*_with_object into custom ops on 5.14+
 # and eliminate method call overhead
@@ -374,17 +374,28 @@ sub do_sock_stream { # via wq_io_do, for big requests
 	recv_and_run($self, my $s2 = delete $self->{0}, $len, 1);
 }
 
+sub send_eor ($$) {
+	my ($s) = @_;
+	my $n;
+	do { $n = send $s, $_[1], MSG_EOR } while !defined($n) && $! == EINTR;
+	$n // ($! == EAGAIN ? return : croak("send: $!"));
+	$n == length($_[1]) ? $n : croak('send('.length($_[1])." > $n)");
+}
+
 sub wq_broadcast {
 	my ($self, $sub, @args) = @_;
 	my $wkr = $self->{-wq_workers} or Carp::confess('no -wq_workers');
 	my $buf = ipc_freeze([$sub, @args]);
 	my $len = length($buf);
 	carp "W: buffer of $len may be too large\n" if $len > 4096;
+	my @exc; # we shouldn't get EAGAIN, here
+	# FIXME: support retry on ENOBUFS for tiny systems
 	for my $bcast1 (values %$wkr) {
 		my $sock = $bcast1 // $self->{-wq_s1} // next;
-		send($sock, $buf, MSG_EOR);
-		# XXX shouldn't have to deal with EMSGSIZE here...
+		eval { send_eor($sock, $buf) } //
+			push(@exc, $@ || "send: unexpected $!");
 	}
+	croak "@exc" if @exc;
 }
 
 sub stream_in_full ($$$) {

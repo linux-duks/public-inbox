@@ -54,7 +54,7 @@ use parent qw(PublicInbox::CodeSearch PublicInbox::IPC PublicInbox::SearchIdx);
 use PublicInbox::Admin;
 use PublicInbox::DS qw(awaitpid);
 use PublicInbox::PktOp;
-use PublicInbox::IPC qw(nproc_shards);
+use PublicInbox::IPC qw(nproc_shards send_eor);
 use POSIX qw(WNOHANG SEEK_SET strftime);
 use File::Path ();
 use File::Spec::Functions qw(canonpath);
@@ -74,7 +74,6 @@ use Compress::Zlib qw(compress);
 use Carp qw(croak);
 use Time::Local qw(timegm);
 use Errno qw(EINTR);
-use Socket qw(MSG_EOR);
 use autodie qw(close pipe open seek sysseek);
 our $DO_QUIT = 15; # signal number
 our (
@@ -226,17 +225,6 @@ sub check_objfmt_status ($$$) {
 	$fmt;
 }
 
-sub xsend ($$) { # move to PerlIO if we need to
-	my ($s, $buf) = @_;
-	my $n;
-	while (1) {
-		$n = send $s, $buf, MSG_EOR;
-		return $n if defined $n;
-		next if $! == EINTR;
-		croak "send: $!";
-	}
-}
-
 sub store_repo { # wq_io_do, sends docid back
 	my ($self, $repo) = @_;
 	my $op_p = delete($self->{0}) // die 'BUG: no {0} op_p';
@@ -260,7 +248,7 @@ EOM
 	my $did = $repo->{docid};
 	$did ? $self->{xdb}->replace_document($did, $doc)
 		: ($did = $self->{xdb}->add_document($doc));
-	xsend $op_p, "repo_stored $did";
+	send_eor $op_p, "repo_stored $did";
 }
 
 sub cidx_ckpoint ($;$) {
@@ -305,7 +293,7 @@ sub cidx_reap_log { # awaitpid cb
 	my ($pid, $cmd, $self, $op_p) = @_;
 	if (!$? || ($DO_QUIT && (($? & 127) == $DO_QUIT ||
 				($? & 127) == POSIX::SIGPIPE))) {
-		xsend $op_p, "shard_done $self->{shard}";
+		send_eor $op_p, "shard_done $self->{shard}";
 	} else {
 		warn "W: @$cmd (\$?=$?)\n";
 		$self->{xdb}->cancel_transaction;
@@ -456,7 +444,7 @@ sub fp_async_done { # run_git cb from worker
 	my ($opt, $self, $git, $op_p) = @_;
 	my $refs = delete $opt->{1} // 'BUG: no {-repo}->{refs}';
 	sysseek($refs, 0, SEEK_SET);
-	xsend $op_p, 'fp_done '.sha_all(256, $refs)->hexdigest;
+	send_eor $op_p, 'fp_done '.sha_all(256, $refs)->hexdigest;
 }
 
 sub fp_done { # called parent via PktOp by fp_async_done
@@ -535,7 +523,7 @@ sub shard_commit { # via wq_io_do
 	my ($self) = @_;
 	my $op_p = delete($self->{0}) // die 'BUG: no {0} op_p';
 	$self->commit_txn_lazy;
-	xsend $op_p, "shard_done $self->{shard}";
+	send_eor $op_p, "shard_done $self->{shard}";
 }
 
 sub dump_roots_start {
@@ -837,7 +825,7 @@ sub prune_commit { # via wq_io_do in IDX_SHARDS
 	my $prune_op_p = delete $self->{0} // die 'BUG: no {0} op_p';
 	my $nr = delete $self->{nr_prune} // die 'BUG: nr_prune undef';
 	cidx_ckpoint($self, "prune [$self->{shard}] $nr done") if $nr;
-	xsend $prune_op_p, "prune_done $self->{shard}";
+	send_eor $prune_op_p, "prune_done $self->{shard}";
 }
 
 sub shards_active { # post_loop_do

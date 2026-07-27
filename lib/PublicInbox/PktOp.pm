@@ -10,8 +10,8 @@ use v5.12;
 use parent qw(PublicInbox::DS);
 use Errno qw(EAGAIN ECONNRESET EINTR);
 use PublicInbox::Syscall qw(EPOLLIN);
-use Socket qw(AF_UNIX SOCK_SEQPACKET MSG_EOR);
-use PublicInbox::IPC qw(ipc_freeze ipc_thaw);
+use Socket qw(AF_UNIX SOCK_SEQPACKET);
+use PublicInbox::IPC qw(ipc_freeze ipc_thaw send_eor);
 use Scalar::Util qw(blessed);
 
 sub new {
@@ -31,7 +31,7 @@ sub pair {
 
 sub pkt_do { # for the producer to trigger event_step in consumer
 	my ($self, $cmd, @args) = @_;
-	send($self->{op_p}, @args ? "$cmd\0".ipc_freeze(\@args) : $cmd, MSG_EOR)
+	send_eor $self->{op_p}, @args ? "$cmd\0".ipc_freeze(\@args) : $cmd;
 }
 
 sub event_step {

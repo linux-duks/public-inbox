@@ -28,7 +28,7 @@ use PublicInbox::Git qw(git_exe);
 use PublicInbox::Import;
 use PublicInbox::ContentHash qw(git_sha);
 use PublicInbox::OnDestroy;
-use PublicInbox::IPC;
+use PublicInbox::IPC qw(send_eor);
 use PublicInbox::Search;
 use PublicInbox::IO qw(poll_in);
 use PublicInbox::XapHelperCxx;
@@ -493,14 +493,7 @@ sub _drop_wq {
 	}
 }
 
-sub send_gently ($$) {
-	my ($s, $buf) = @_;
-	my $n;
-	while (1) {
-		$n = send $s, $buf, MSG_EOR;
-		return $n if defined($n) || $! != EINTR;
-	}
-}
+sub send_gently ($$) { eval { send_eor $_[0], $_[1] } }
 
 # pronounced "exit": x_it(1 << 8) => exit(1); x_it(13) => SIGPIPE
 sub x_it ($$) {
@@ -1631,7 +1624,7 @@ sub cfg_dump ($$) {
 sub request_umask { # assumes client is trusted and fast
 	my ($lei) = @_;
 	my $s = $lei->{sock} // return;
-	send($s, 'umask', MSG_EOR) // die "send: $!";
+	send_eor($s, 'umask') // die "send: $!"; # never EAGAIN
 	my ($v, $r, $u);
 	do { # n.b. poll_in returns -1 on EINTR
 		vec($v = '', fileno($s), 1) = 1;
