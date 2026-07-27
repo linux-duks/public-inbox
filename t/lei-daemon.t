@@ -6,9 +6,6 @@ use Socket qw(AF_UNIX SOCK_SEQPACKET pack_sockaddr_un MSG_EOR);
 
 test_lei({ daemon_only => 1 }, sub {
 	my $send_cmd = PublicInbox::Spawn->can('send_cmd4') // do {
-		require PublicInbox::CmdIPC4;
-		PublicInbox::CmdIPC4->can('send_cmd4');
-	} // do {
 		require PublicInbox::Syscall;
 		PublicInbox::Syscall->can('send_cmd4');
 	};

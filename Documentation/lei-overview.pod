@@ -127,10 +127,6 @@ L<IO::KQueue> (p5-IO-KQueue on FreeBSD) and L<Linux::Inotify2>
 (liblinux-inotify2-perl and perl-Linux-Inotify2 in .deb and .rpm-based
 distros, respectively) are recommended.
 
-L<Socket::MsgHdr> is optional (libsocket-msghdr-perl in Debian),
-and further improves startup performance.  Its effect is most felt
-when using shell completion.
-
 =head1 BASH COMPLETION
 
 Preliminary Bash completion for lei is provided in

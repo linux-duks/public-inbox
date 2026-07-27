@@ -738,10 +738,9 @@ sub need_scm_rights () {
 	state $ok = do {
 			require PublicInbox::Syscall;
 			PublicInbox::Syscall->can('send_cmd4'); # Linux+*BSD
-		} || eval { require Socket::MsgHdr; 1 } ||
-			PublicInbox::Spawn->can('send_cmd4');
+		} || PublicInbox::Spawn->can('send_cmd4');
 	return () if $ok;
-	('need SCM_RIGHTS support: Socket::MsgHdr OR ' .
+	('need SCM_RIGHTS support: ' .
 	 '(syscall numbers + msg_hdr pack templates missing) OR ' .
 	 'Inline::C unconfigured/missing '.
 	 '( mkdir -p ~/.cache/public-inbox/inline-c)' );

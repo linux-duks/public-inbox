@@ -14,6 +14,7 @@ use v5.12;
 use IO::Handle; # ->autoflush
 use PublicInbox::TestCommon;
 use PublicInbox::Spawn;
+use PublicInbox::Syscall;
 eval { require PublicInbox::Lg2 }; # placate FindBin
 use PublicInbox::DS; # already loaded by Spawn via PublicInbox::IO
 use Getopt::Long qw(:config gnu_getopt no_ignore_case auto_abbrev);
@@ -60,7 +61,7 @@ my ($for_destroy, $lei_env, $lei_daemon_pid, $owner_pid);
 # because lei-daemon uses a single inotify FD for all clients.
 if ($ENV{TEST_LEI_DAEMON_PERSIST} && !$ENV{TEST_LEI_DAEMON_PERSIST_DIR} &&
 		(PublicInbox::Spawn->can('recv_cmd4') ||
-			eval { require Socket::MsgHdr })) {
+			PublicInbox::Syscall->can('recv_cmd4'))) {
 	$lei_env = {};
 	($lei_env->{XDG_RUNTIME_DIR}, $for_destroy) = tmpdir;
 	$ENV{TEST_LEI_DAEMON_PERSIST_DIR} = $lei_env->{XDG_RUNTIME_DIR};

@@ -520,10 +520,21 @@ sub CMSG_LEN ($) { CMSG_ALIGN_SIZEOF_cmsghdr + $_[0] }
 use constant msg_controllen_max =>
 	CMSG_SPACE(10 * SIZEOF_int) + SIZEOF_cmsghdr; # space for 10 FDs
 
+sub sendmsg_retry ($) {
+	return 1 if $!{EINTR};
+	return unless ($!{ENOMEM} || $!{ENOBUFS} || $!{ETOOMANYREFS});
+	return if $_[0]-- == 0;
+	# n.b. `N & (power-of-two - 1)' is a faster `N % power-of-two'
+	warn "# sleeping on sendmsg: $! ($_[0] tries left)\n" if !($_[0] & 15);
+	select(undef, undef, undef, 0.1);
+	1;
+}
+
+sub fd2io (@) { map { open my $fh, '+<&=', $_; $fh } @_ }
+
 no warnings 'once';
 
 if (defined($SYS_sendmsg) && defined($SYS_recvmsg)) {
-require PublicInbox::CmdIPC4;
 
 *send_cmd4 = sub ($$$$;$) {
 	my ($sock, $io, undef, $flags, $tries) = @_;
@@ -548,7 +559,7 @@ require PublicInbox::CmdIPC4;
 	$tries //= -1;
 	do {
 		$s = syscall($SYS_sendmsg, fileno($sock), $mh, $flags);
-	} while ($s < 0 && PublicInbox::CmdIPC4::sendmsg_retry($tries));
+	} while ($s < 0 && sendmsg_retry($tries));
 	$s >= 0 ? $s : undef;
 };
 
@@ -580,8 +591,7 @@ require PublicInbox::CmdIPC4;
 					$cmsghdr);
 		if ($lvl == SOL_SOCKET && $type == SCM_RIGHTS) {
 			$len -= CMSG_ALIGN_SIZEOF_cmsghdr;
-			@ret = PublicInbox::CmdIPC4::fd2io(
-					@fds[0..(($len / SIZEOF_int) - 1)]);
+			@ret = fd2io(@fds[0..(($len / SIZEOF_int) - 1)]);
 		}
 	}
 	@ret;

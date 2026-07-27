@@ -50,15 +50,14 @@ if ($enc && $dec) { # should be custom ops
 	*ipc_thaw = \&Storable::thaw;
 }
 
-our $recv_cmd = PublicInbox::Spawn->can('recv_cmd4');
-our $send_cmd = PublicInbox::Spawn->can('send_cmd4') // do {
-	require PublicInbox::CmdIPC4;
-	$recv_cmd //= PublicInbox::CmdIPC4->can('recv_cmd4');
-	PublicInbox::CmdIPC4->can('send_cmd4');
+our ($recv_cmd, $send_cmd);
+do {
+	$recv_cmd = PublicInbox::Spawn->can('recv_cmd4');
+	$send_cmd = PublicInbox::Spawn->can('send_cmd4');
 } // do {
 	require PublicInbox::Syscall;
-	$recv_cmd //= PublicInbox::Syscall->can('recv_cmd4');
-	PublicInbox::Syscall->can('send_cmd4');
+	$recv_cmd = PublicInbox::Syscall->can('recv_cmd4');
+	$send_cmd = PublicInbox::Syscall->can('send_cmd4');
 };
 
 sub _get_rec ($) {

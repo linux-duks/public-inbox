@@ -1405,7 +1405,7 @@ sub lazy_start {
 	local $oldset = PublicInbox::DS::block_signals(POSIX::SIGALRM);
 	die "incompatible narg=$narg" if $narg != 5;
 	$PublicInbox::IPC::send_cmd or die <<"";
-(Socket::MsgHdr || Inline::C) missing/unconfigured (narg=$narg);
+Inline::C missing/unconfigured (narg=$narg);
 
 	require PublicInbox::Listener;
 	require PublicInbox::PktOp;

@@ -117,23 +117,6 @@ SKIP: {
 }
 
 SKIP: {
-	require_mods('Socket::MsgHdr', 13);
-	require_ok 'PublicInbox::CmdIPC4';
-	$send = PublicInbox::CmdIPC4->can('send_cmd4');
-	$recv = PublicInbox::CmdIPC4->can('recv_cmd4');
-	$do_test->(SOCK_STREAM, 0, 'MsgHdr stream');
-	$do_test->(SOCK_SEQPACKET, MSG_EOR, 'MsgHdr seqpacket');
-	SKIP: {
-		($send_ic && $recv_ic) or
-			skip 'Inline::C not installed/enabled', 12;
-		$recv = $recv_ic;
-		$do_test->(SOCK_STREAM, 0, 'Inline::C -> MsgHdr stream');
-		$do_test->(SOCK_SEQPACKET,
-			MSG_EOR, 'Inline::C -> MsgHdr seqpacket');
-	}
-}
-
-SKIP: {
 	require_ok 'PublicInbox::Syscall';
 	$send = PublicInbox::Syscall->can('send_cmd4') or
 		skip "send_cmd4 not defined for $^O arch", 1;
