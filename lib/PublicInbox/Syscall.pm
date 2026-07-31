@@ -566,10 +566,10 @@ if (defined($SYS_sendmsg) && defined($SYS_recvmsg)) {
 };
 
 *recv_cmd4 = sub ($$$) {
-	my ($sock, undef, $len) = @_;
-	vec($_[1] //= '', $len - 1, 8) = 0;
+	my ($sock, undef, $blen) = @_;
+	vec($_[1] //= '', $blen - 1, 8) = 0;
 	my $cmsghdr = "\0" x msg_controllen_max; # 10 * sizeof(int)
-	my $iov = pack('P'.TMPL_size_t, $_[1], $len);
+	my $iov = pack('P'.TMPL_size_t, $_[1], $blen);
 	my $mh = pack(TMPL_msghdr,
 			undef, 0, # msg_name, msg_namelen (unused)
 			$iov, 1, # msg_iov, msg_iovlen
@@ -588,16 +588,16 @@ if (defined($SYS_sendmsg) && defined($SYS_recvmsg)) {
 	my @ret;
 	if ($r > 0) {
 		my $msg_flags = (unpack TMPL_msghdr, $mh)[-1];
-		my ($len, $lvl, $type, @fds) = unpack(TMPL_cmsg_len.
+		my ($clen, $lvl, $type, @fds) = unpack(TMPL_cmsg_len.
 					'LL'. # cmsg_level, cmsg_type
 					CMSG_DATA_off.'i*', # @fds
 					$cmsghdr);
 		if ($lvl == SOL_SOCKET && $type == SCM_RIGHTS) {
-			$len -= CMSG_ALIGN_SIZEOF_cmsghdr;
-			@ret = fd2io(@fds[0..(($len / SIZEOF_int) - 1)]);
+			$clen -= CMSG_ALIGN_SIZEOF_cmsghdr;
+			@ret = fd2io(@fds[0..(($clen / SIZEOF_int) - 1)]);
 		}
 		($msg_flags & (MSG_CTRUNC|MSG_TRUNC)) and
-			croak "recvmsg $len => $r trunc ".
+			croak "recvmsg $blen => $r trunc ".
 				sprintf('0x%0x', $msg_flags);
 	}
 	@ret;
