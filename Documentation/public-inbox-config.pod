@@ -159,6 +159,11 @@ setting are listed after all sorted inboxes, ordered by last
 modification time (descending).  This is useful for pinning
 important or frequently-accessed inboxes to the top of the list.
 
+The sort order is recorded in the extindex C<misc> index; run
+L<public-inbox-extindex(1)> with C<--reindex> (or C<--all>) after
+adding or changing this value for an inbox before it is reflected
+on the C<all> listing page.
+
 Default: none (sorted by modification time descending)
 
 =item publicinbox.<name>.indexSequentialShard

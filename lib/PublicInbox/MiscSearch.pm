@@ -13,6 +13,7 @@ our $MODIFIED = 0;
 our $UIDVALIDITY = 1; # (created time)
 our $ART_MIN = 2; # NNTP article number
 our $ART_MAX = 3; # NNTP article number
+our $SORTORDER = 4; # sortorder value column
 
 # avoid conflicting with message Search::prob_prefix for UI/UX reasons
 my %PROB_PREFIX = (
@@ -55,6 +56,18 @@ sub mi_qp_new ($) {
 	$qp;
 }
 
+sub sort_mk_keymaker {
+	my ($cols) = @_; # [[$col, $reverse], ...]
+	PublicInbox::Search::load_xapian();
+	my $km = $PublicInbox::Search::MULTI_VALUE_SORTER->new;
+	if ($PublicInbox::Search::Xap eq 'Xapian') {
+		$km->add_value($_->[0], $_->[1]) for @$cols;
+	} else {
+		$km->add($_->[0], !$_->[1]) for @$cols;
+	}
+	$km;
+}
+
 sub mset {
 	my ($self, $qs, $opt) = @_;
 	$opt ||= {};
@@ -63,7 +76,12 @@ sub mset {
 	$qs = 'type:inbox' if $qs eq '';
 	my $qr = $qp->parse_query($qs, $PublicInbox::Search::QP_FLAGS);
 	$opt->{relevance} = 1 unless exists $opt->{relevance};
-	$opt->{sort_col} = $MODIFIED;
+	if ($opt->{sort_cols}) {
+		$opt->{sort_keymaker} =
+			sort_mk_keymaker($opt->{sort_cols});
+	} elsif (!exists $opt->{sort_col}) {
+		$opt->{sort_col} = $MODIFIED;
+	}
 	$opt->{limit} ||= 200;
 	PublicInbox::Search::do_enquire($self, $qr, $opt);
 }
