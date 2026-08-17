@@ -100,7 +100,11 @@ sub add_misc_ibx { # MiscSearch->retry_reopen callback
 		offset => $o,
 		asc => $asc,
 		relevance => $r,
-		limit => $q->{l}
+		limit => $q->{l},
+		sort_cols => [
+			[ $PublicInbox::MiscSearch::SORTORDER, 0 ],
+			[ $PublicInbox::MiscSearch::MODIFIED, 1 ],
+		],
 	};
 	$qs .= ' type:inbox';
 
@@ -222,14 +226,9 @@ sub psgi_triple {
 	if (my $list = delete $ctx->{-list}) {
 		my $mset = delete $ctx->{-mset};
 		$code = 200;
-		if ($mset) { # already sorted, so search bar:
+		if ($mset) { # sorted by MiscSearch via keymaker
 			print $zfh mset_nav_top($ctx, $mset);
-			# FIXME: make PublicInbox::MiscIdx index sortorder
-			# then use Xapian::MultiValueKeyMaker or
-			# Search::Xapian::MultiValueSorter (old) in
-			# PublicInbox::MiscSearch
-			@$list = map { $_->[1] }
-				sort { $a->[0] <=> $b->[0] } @$list;
+			@$list = map { $_->[1] } @$list;
 		} else { # sort by sortorder (asc), then modified (desc)
 			my $so; # outside of sort block to reduce allocations
 			# $list = [ [$sortorder, {-modified}, $raw_html], ... ]

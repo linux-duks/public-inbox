@@ -19,6 +19,7 @@ use PublicInbox::SearchIdx qw(index_text term_generator add_val add_bool_term
 	xap_wdb);
 use Carp qw(croak);
 use File::Path ();
+use POSIX qw(Inf);
 use PublicInbox::MiscSearch;
 use PublicInbox::Config;
 use PublicInbox::Syscall;
@@ -106,6 +107,8 @@ EOF
 	# allow sorting by modified and uidvalidity (created at)
 	add_val($doc, $PublicInbox::MiscSearch::MODIFIED, $ibx->modified);
 	add_val($doc, $PublicInbox::MiscSearch::UIDVALIDITY, $ibx->uidvalidity);
+	add_val($doc, $PublicInbox::MiscSearch::SORTORDER,
+		$ibx->{sortorder} // Inf);
 
 	add_bool_term($doc, 'Q'.$eidx_key); # uniQue id
 	$doc->add_boolean_term('T'.'inbox'); # Type

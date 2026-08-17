@@ -68,6 +68,7 @@ our $QP_FLAGS;
 our %X = map { $_ => 0 } qw(BoolWeight Database Enquire QueryParser Stem Query);
 our $Xap; # 'Xapian' or 'Search::Xapian'
 our $NVRP; # '$Xap::'.('NumberValueRangeProcessor' or 'NumberRangeProcessor')
+our $MULTI_VALUE_SORTER; # Xapian::MultiValueKeyMaker or Search::Xapian::MultiValueSorter
 
 # ENQ_DESCENDING and ENQ_ASCENDING weren't in SWIG Xapian.pm prior to 1.4.16,
 # let's hope the ABI is stable
@@ -123,6 +124,9 @@ sub load_xapian () {
 		# continue with the older /Value/ variant for now...
 		$NVRP = $x.'::'.($x eq 'Xapian' && $xver ge v1.5 ?
 			'NumberRangeProcessor' : 'NumberValueRangeProcessor');
+		$MULTI_VALUE_SORTER = $x eq 'Xapian' ?
+			'Xapian::MultiValueKeyMaker' :
+			'Search::Xapian::MultiValueSorter';
 		$X{$_} = $Xap.'::'.$_ for (keys %X);
 
 		*sortable_serialise = $x.'::sortable_serialise';
@@ -532,15 +536,27 @@ sub do_enquire { # shared with CodeSearch and MiscSearch
 	my ($self, $qry, $opt) = @_;
 	my $enq = $X{Enquire}->new(xdb($self));
 	$enq->set_query($qry);
-	my $col = $opt->{sort_col} // TS;
-	if ($col < 0) {
-		$enq->set_weighting_scheme($X{BoolWeight}->new);
-		$enq->set_docid_order(
-			$opt->{asc} ? $ENQ_ASCENDING : $ENQ_DESCENDING);
-	} elsif ($opt->{relevance}) {
-		$enq->set_sort_by_relevance_then_value($col, !$opt->{asc});
+	if (my $km = $opt->{sort_keymaker}) {
+		my $rev = $opt->{asc} ? 1 : 0;
+		if ($opt->{relevance}) {
+			$enq->set_sort_by_relevance_then_key($km, $rev);
+		} else {
+			$enq->set_sort_by_key_then_relevance($km, $rev);
+		}
 	} else {
-		$enq->set_sort_by_value_then_relevance($col, !$opt->{asc});
+		my $col = $opt->{sort_col} // TS;
+		if ($col < 0) {
+			$enq->set_weighting_scheme($X{BoolWeight}->new);
+			$enq->set_docid_order(
+				$opt->{asc} ? $ENQ_ASCENDING :
+				$ENQ_DESCENDING);
+		} elsif ($opt->{relevance}) {
+			$enq->set_sort_by_relevance_then_value($col,
+				!$opt->{asc});
+		} else {
+			$enq->set_sort_by_value_then_relevance($col,
+				!$opt->{asc});
+		}
 	}
 	# `lei q -t / --threads' or JMAP collapseThreads; but don't collapse
 	# on `-tt' ({threads} > 1) which sets the Flagged|Important keyword

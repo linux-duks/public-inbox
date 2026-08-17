@@ -53,7 +53,11 @@ EOM
 	grokManifest = all
 [publicinbox "m2t"]
 	inboxdir = $m2t->{inboxdir}
+	url = http://example.com/m2t
 	address = $m2t->{-primary_address}
+	sortorder = 2
+[publicinbox "t1"]
+	sortorder = 10
 EOM
 	close $cfgfh or xbail "close: $!";
 }
@@ -95,19 +99,50 @@ my $client = sub {
 	unlike($res->content, qr!no inboxes, yet!,
 		'we have inboxes, just no matches');
 
+	$res = $cb->(GET('/'));
+	my $c = $res->content;
+	my $m2t_pos = index($c, '/m2t');
+	my $t1_pos = index($c, '/t1');
+	my $t2_pos = index($c, '/t2');
+	ok($m2t_pos < $t1_pos,
+		'm2t (sortorder=2) before t1 (sortorder=10)');
+	ok($t1_pos < $t2_pos,
+		't1 (sortorder=10) before t2 (no sortorder)');
+
+	$res = $cb->(GET('/?o=-1'));
+	is($res->code, 200, 'reverse listing (o=-1)');
+	$c = $res->content;
+	$m2t_pos = index($c, '/m2t');
+	$t1_pos = index($c, '/t1');
+	$t2_pos = index($c, '/t2');
+	ok($t2_pos < $t1_pos && $t1_pos < $m2t_pos,
+		'o=-1 reverses order: t2, t1, m2t');
+
+	$res = $cb->(GET('/?r=1'));
+	is($res->code, 200, 'relevance listing (r=1)');
+	$c = $res->content;
+	$m2t_pos = index($c, '/m2t');
+	$t1_pos = index($c, '/t1');
+	$t2_pos = index($c, '/t2');
+	ok($m2t_pos < $t1_pos && $t1_pos < $t2_pos,
+		'r=1 keeps sortorder tie-break: m2t, t1, t2');
+
 	my $m = {};
-	for my $pfx (qw(/t1 /t2), '') {
+	for my $pfx (qw(/m2t /t1 /t2), '') {
 		$res = $cb->(GET($pfx.'/manifest.js.gz'));
 		gunzip(\($res->content) => \(my $js));
 		$m->{$pfx} = json_utf8->decode($js);
 	}
 	is_deeply([sort keys %{$m->{''}}],
-		[ sort(keys %{$m->{'/t1'}}, keys %{$m->{'/t2'}}) ],
-		't1 + t2 = all');
+		[ sort(keys %{$m->{'/m2t'}}, keys %{$m->{'/t1'}},
+			keys %{$m->{'/t2'}}) ],
+		'm2t + t1 + t2 = all');
 	is_deeply([ sort keys %{$m->{'/t2'}} ], [ '/t2/git/0.git' ],
 		't2 manifest');
 	is_deeply([ sort keys %{$m->{'/t1'}} ], [ '/t1' ],
-		't2 manifest');
+		't1 manifest');
+	is_deeply([ sort keys %{$m->{'/m2t'}} ], [ '/m2t/git/0.git' ],
+		'm2t manifest');
 
 	# ensure ibx->{isrch}->{es}->over is used instead of ibx->over:
 	$res = $cb->(POST("/m2t/t\@1/?q=dt:19931002000259..&x=m"));
